@@ -24,4 +24,20 @@ CryptoRecon is a Python-based tool designed to **analyze web applications and lo
   - JWTs, API keys in local code
   - `.env` files and backups
 
+
+- **Output & Automation**  
+  - CLI menu for choosing “Website Scan” or “Local Scan”  
+  - JSON-formatted summary for website scans  
+  - Human-readable output for local scans  
+  - Optional GitHub code search (requires `GITHUB_TOKEN`)
 ---
+
+## Prerequisites
+- Python 3.7+
+- `pip` (for installing dependencies)
+- (Optional) `GITHUB_TOKEN` environment variable to enable GitHub code search
+
+- ## Installation
+git clone https://github.com/abdulrafayishaCkER/crypto-asset-scanner/
+cd crypto-asset-scanner
+pip install -r requirements.txt
