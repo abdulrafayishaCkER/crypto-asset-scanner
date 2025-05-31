@@ -367,7 +367,7 @@ def print_banner():
 / /___/ /_/ / / / (__  ) /_/ /_/ / / / / / /  __/ / / / / /
 \____/\____/_/ /_/____/\__/\____/_/ /_/ /_/\___/_/ /_/ /_/ 
                                                             
-                 Crypscan v1.0 - by kali㉿project
+                 CryptoRecon v1.0 - by kali㉿project
 {RESET}"""
     print(banner)
 
