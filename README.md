@@ -43,7 +43,7 @@ CryptoRecon is a Python-based tool designed to **analyze web applications and lo
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/YourUserName/crypto-asset-scanner.git
+git clone https://github.com/abdulrafayishaCkER/crypto-asset-scanner
 cd crypto-asset-scanner
 pip install -r requirements.txt
 
