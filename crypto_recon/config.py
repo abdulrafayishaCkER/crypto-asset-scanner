@@ -5,7 +5,44 @@ from __future__ import annotations
 HTTP_TIMEOUT: int = 10
 MAX_THREADS: int = 5
 MAX_CRAWL_DEPTH: int = 2
-USER_AGENT: str = "CryptoRecon/2.0 Security Scanner"
+USER_AGENT: str = "CryptoRecon/2.1 CBOM Scanner"
+MAX_REQUEST_BUDGET: int = 200
+RATE_LIMIT_PER_SECOND: float = 5.0
+
+MAX_FILE_SIZE_BYTES: int = 5 * 1024 * 1024
+MAX_FILE_READ_BYTES: int = 5 * 1024 * 1024
+
+SKIP_DIRS: list[str] = [
+    ".git",
+    ".hg",
+    ".svn",
+    ".tox",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "vendor",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+
+SOFT_404_PATTERNS: list[str] = [
+    "page not found",
+    "not found",
+    "404",
+    "does not exist",
+    "error 404",
+]
+
+LOGIN_PAGE_PATTERNS: list[str] = [
+    "login",
+    "sign in",
+    "signin",
+    "log in",
+    "authentication required",
+]
 
 WEAK_CIPHER_KEYWORDS: list[str] = ["RC4", "3DES", "DES", "NULL", "MD5", "EXPORT", "anon"]
 

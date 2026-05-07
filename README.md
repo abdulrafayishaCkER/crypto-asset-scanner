@@ -7,19 +7,20 @@
 / /___/ /_/ / / / (__  ) /_/ /_/ / / / / / /  __/ / / / / /
 \____/\____/_/ /_/____/\__/\____/_/ /_/ /_/\___/_/ /_/ /_/
 
-          CryptoRecon v2.0 – Professional Security Scanner
+          CryptoRecon v2.1 – CBOM Discovery & Security Scanner
 ```
 
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-**CryptoRecon** is a professional-grade cryptographic asset and secret discovery tool. It performs comprehensive security reconnaissance against web targets and local filesystems, identifying exposed credentials, misconfigured TLS, missing security headers, DNS weaknesses, and more.
+**CryptoRecon** is a production-ready CBOM (Cryptographic Bill of Materials) discovery tool. It inventories cryptographic assets and safe evidence across web targets and local filesystems, while also surfacing security findings such as exposed credentials, misconfigured TLS, missing security headers, and DNS weaknesses.
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
+- [CBOM Discovery](#cbom-discovery)
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -32,6 +33,9 @@
 - [Security Headers Checked](#security-headers-checked)
 - [Exposed Paths Checked](#exposed-paths-checked)
 - [Output Formats](#output-formats)
+- [Safety Notes](#safety-notes)
+- [Limitations](#limitations)
+- [Production Roadmap](#production-roadmap)
 - [Legal Disclaimer](#legal-disclaimer)
 - [Contributing](#contributing)
 - [License](#license)
@@ -72,6 +76,7 @@
 - JWT tokens, Basic Auth in URLs
 - Firebase, Heroku, npm, PyPI tokens
 - Generic password/secret patterns
+- Redacted evidence only (no raw secrets stored) with SHA-256 fingerprints
 
 ### Web Reconnaissance
 - Concurrent probing of 70+ exposed paths (`.env`, `.git/config`, SSH keys, backups, …)
@@ -103,33 +108,54 @@
 - Rich colour-coded terminal output
 - JSON report export
 - Self-contained HTML report with collapsible findings
+- CycloneDX-style CBOM JSON export
+
+---
+
+## CBOM Discovery
+
+CBOM discovery means building a **structured inventory** of cryptographic assets and related services, rather than only listing security findings. CryptoRecon captures:
+
+- Certificates (subject, issuer, SANs, validity, fingerprint, chain position)
+- Supported TLS protocols and cipher suites
+- Cryptographic algorithms observed in certificates and TLS handshakes
+- Secret/key references with **redaction and SHA-256 fingerprinting** only
+- Dependencies and libraries from common manifests
+- Endpoints and services discovered during crawling
+
+Each asset is deduplicated with confidence levels (high/medium/low) and safe evidence fields (file path, line number, URL, endpoint, certificate fingerprint).
 
 ---
 
 ## Architecture
 
 ```
-crypto_recon/
-├── __init__.py          # Version / package metadata
-├── __main__.py          # python -m crypto_recon entry point
-├── cli.py               # CLI parser + scan orchestration
-├── config.py            # All constants and regex patterns
-├── scanner/
-│   ├── tls_scanner.py   # TLS protocol & cipher enumeration (sslyze)
-│   ├── cert_analyzer.py # Certificate chain analysis
-│   ├── header_analyzer.py
-│   ├── secret_scanner.py
-│   ├── web_crawler.py   # Concurrent exposed-path probing
-│   ├── subdomain_enum.py
-│   ├── dns_analyzer.py
-│   └── github_scanner.py
-├── models/
-│   ├── finding.py       # Finding dataclass + Severity/Category enums
-│   └── report.py        # Report dataclass
-├── output/
-│   ├── console.py       # Rich terminal output
-│   ├── json_output.py
-│   └── html_output.py
+ crypto_recon/
+ ├── __init__.py          # Version / package metadata
+ ├── __main__.py          # python -m crypto_recon entry point
+ ├── cli.py               # CLI parser + scan orchestration
+ ├── config.py            # All constants and regex patterns
+ ├── scanner/
+ │   ├── tls_scanner.py   # TLS protocol & cipher enumeration (sslyze)
+ │   ├── cert_analyzer.py # Certificate chain analysis
+ │   ├── header_analyzer.py
+ │   ├── secret_scanner.py
+ │   ├── dependency_scanner.py
+ │   ├── web_crawler.py   # Concurrent exposed-path probing
+ │   ├── subdomain_enum.py
+ │   ├── dns_analyzer.py
+ │   └── github_scanner.py
+ ├── models/
+ │   ├── asset.py         # Asset + Confidence models
+ │   ├── evidence.py      # Safe evidence model
+ │   ├── finding.py       # Finding dataclass + Severity/Category enums
+ │   ├── report.py        # Report dataclass
+ │   └── scan_result.py   # ScanResults aggregator
+ ├── output/
+ │   ├── console.py       # Rich terminal output
+ │   ├── cbom_output.py   # CycloneDX-style CBOM output
+ │   ├── json_output.py
+ │   └── html_output.py
 └── utils/
     ├── logger.py
     ├── network.py       # make_request, check_connectivity, extract_domain
@@ -151,6 +177,9 @@ source .venv/bin/activate    # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 pip install -e .
+
+# Optional: development tooling
+pip install -e ".[dev]"
 ```
 
 ### Quick pip install
@@ -173,13 +202,16 @@ cryptorecon scan local <path> [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--port INT` | TLS/HTTPS port | `443` |
-| `--output FORMAT` | `console` \| `json` \| `html` | `console` |
+| `--output FORMAT` | `console` \| `json` \| `html` \| `cbom` | `console` |
 | `--report FILE` | Save report to file | — |
 | `--timeout INT` | HTTP timeout (seconds) | `10` |
 | `--threads INT` | Concurrent worker threads | `5` |
 | `--severity LEVEL` | Minimum severity to display | `info` |
 | `--deep` | Enable additional deep checks | off |
 | `--github-token TOKEN` | GitHub API token | `$GITHUB_TOKEN` |
+| `--max-requests INT` | Web crawl request budget | config |
+| `--rate-limit FLOAT` | Web crawl requests per second | config |
+| `--max-file-size INT` | Local scan file size limit (bytes) | config |
 | `--no-color` | Disable colour output | off |
 | `-v / --verbose` | Enable debug logging | off |
 | `-q / --quiet` | Minimal output | off |
@@ -198,6 +230,9 @@ cryptorecon scan web example.com --output html --report report.html
 
 # JSON report with verbose logging
 cryptorecon scan web example.com --output json --report findings.json -v
+
+# CBOM JSON
+cryptorecon scan web example.com --output cbom --report cbom.json
 
 # Show only HIGH and above
 cryptorecon scan web example.com --severity high
@@ -229,6 +264,9 @@ cryptorecon scan local /home/user/projects --output json --report secrets.json
 
 # Non-recursive scan
 cryptorecon scan local /etc --output console
+
+# Limit file size to 2 MB
+cryptorecon scan local /srv/app --max-file-size 2097152
 ```
 
 ### Interactive Mode
@@ -252,7 +290,11 @@ All constants live in `crypto_recon/config.py`:
 | `HTTP_TIMEOUT` | `10` | Per-request timeout (seconds) |
 | `MAX_THREADS` | `5` | ThreadPoolExecutor workers |
 | `MAX_CRAWL_DEPTH` | `2` | Crawler recursion depth |
-| `USER_AGENT` | `CryptoRecon/2.0 Security Scanner` | HTTP User-Agent |
+| `USER_AGENT` | `CryptoRecon/2.1 CBOM Scanner` | HTTP User-Agent |
+| `MAX_REQUEST_BUDGET` | `200` | Maximum HTTP requests during crawling |
+| `RATE_LIMIT_PER_SECOND` | `5` | Requests per second limit |
+| `MAX_FILE_SIZE_BYTES` | `5 MB` | Maximum file size scanned locally |
+| `SKIP_DIRS` | `.git`, `node_modules`, `vendor`, ... | Directories skipped in local scans |
 
 To customise at runtime, set environment variables or edit `config.py`.
 
@@ -353,7 +395,34 @@ Self-contained single-file report with:
 cryptorecon scan web example.com --output html --report report.html
 ```
 
+### CBOM (CycloneDX-style JSON)
+Structured CBOM export suitable for inventory pipelines and asset tracking.
+
+```bash
+cryptorecon scan web example.com --output cbom --report cbom.json
+```
+
 ---
+
+## Safety Notes
+
+- CryptoRecon never stores raw secrets in output. Only redacted previews and SHA-256 fingerprints are retained.
+- All network operations are timeout-bound and rate limited by default.
+- Use `--max-requests` and `--rate-limit` to control crawl scope in production pipelines.
+
+## Limitations
+
+- Certificate and TLS analysis depends on `sslyze` availability.
+- Subdomain enumeration relies on certificate transparency data and may miss private/internal hosts.
+- DNS checks use common DKIM selectors and are marked low confidence when unverified.
+- Web crawling uses heuristic soft-404 detection and may require manual validation.
+
+## Production Roadmap
+
+- Add richer dependency manifest parsers (lockfiles, SBOM import).
+- Add authenticated crawling and API token support for protected assets.
+- Add incremental scanning with asset diffing and historical baselines.
+- Add policy-as-code integrations for CI/CD enforcement.
 
 ## Legal Disclaimer
 

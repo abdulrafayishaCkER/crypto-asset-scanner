@@ -42,7 +42,7 @@ def create_parser() -> argparse.ArgumentParser:
     """Build and return the top-level argument parser."""
     parser = argparse.ArgumentParser(
         prog="cryptorecon",
-        description="CryptoRecon – Professional Cryptographic Asset & Secret Discovery Tool",
+        description="CryptoRecon – CBOM Discovery & Cryptographic Asset Inventory Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -73,6 +73,12 @@ def create_parser() -> argparse.ArgumentParser:
     local_parser.add_argument(
         "--recursive", action="store_true", help="Recursively scan subdirectories"
     )
+    local_parser.add_argument(
+        "--max-file-size",
+        type=int,
+        default=None,
+        help="Maximum file size to scan in bytes (default: config)",
+    )
     _add_common_options(local_parser)
 
     return parser
@@ -82,7 +88,7 @@ def _add_common_options(p: argparse.ArgumentParser) -> None:
     """Attach shared options to a sub-command parser."""
     p.add_argument(
         "--output",
-        choices=["console", "json", "html"],
+        choices=["console", "json", "html", "cbom"],
         default="console",
         help="Output format (default: console)",
     )
@@ -100,6 +106,18 @@ def _add_common_options(p: argparse.ArgumentParser) -> None:
     )
     p.add_argument("--deep", action="store_true", help="Enable deep scanning (more checks)")
     p.add_argument("--github-token", metavar="TOKEN", help="GitHub API token for code search")
+    p.add_argument(
+        "--max-requests",
+        type=int,
+        default=None,
+        help="Maximum HTTP request budget for web crawling (default: config)",
+    )
+    p.add_argument(
+        "--rate-limit",
+        type=float,
+        default=None,
+        help="Max HTTP requests per second for web crawling (default: config)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +131,8 @@ def run_web_scan(
     threads: int = 5,
     deep: bool = False,
     github_token: Optional[str] = None,
+    max_requests: Optional[int] = None,
+    rate_limit: Optional[float] = None,
     quiet: bool = False,
 ) -> Report:
     """Orchestrate a full web target scan and return a :class:`Report`.
@@ -148,12 +168,19 @@ def run_web_scan(
         metadata={"port": port, "deep": deep},
     )
 
+    crawler = WebCrawler(
+        timeout=timeout,
+        threads=threads,
+        max_requests=max_requests,
+        rate_limit=rate_limit,
+    )
+
     steps = [
         ("TLS Configuration", lambda: TLSScanner(timeout=timeout).scan(target, port)),
         ("Certificate Chain", lambda: CertAnalyzer().analyze(target, port)),
         ("Security Headers", lambda: HeaderAnalyzer().analyze(target, port)),
-        ("Exposed Paths & Secrets", lambda: WebCrawler(timeout=timeout, threads=threads).crawl(target, port)),
-        ("API Endpoints", lambda: WebCrawler(timeout=timeout, threads=threads).discover_api_endpoints(target, port)),
+        ("Exposed Paths & Secrets", lambda: crawler.crawl(target, port)),
+        ("API Endpoints", lambda: crawler.discover_api_endpoints(target, port)),
         ("Subdomain Enumeration", lambda: SubdomainEnumerator().enumerate(_base_domain(target))),
         ("DNS Analysis", lambda: DNSAnalyzer().analyze(_base_domain(target))),
         ("GitHub Code Search", lambda: GitHubScanner(token=github_token or os.getenv("GITHUB_TOKEN")).search(target)),
@@ -162,7 +189,7 @@ def run_web_scan(
     if quiet:
         for _, fn in steps:
             try:
-                report.findings.extend(fn())
+                report.extend_results(fn())
             except Exception as exc:
                 logger.error("Scan step failed: %s", exc)
     else:
@@ -171,7 +198,7 @@ def run_web_scan(
             for name, fn in steps:
                 progress.update(task, description=f"[cyan]{name}[/cyan]…")
                 try:
-                    report.findings.extend(fn())
+                    report.extend_results(fn())
                 except Exception as exc:
                     logger.error("Step %r failed: %s", name, exc)
                 progress.advance(task)
@@ -183,6 +210,7 @@ def run_web_scan(
 def run_local_scan(
     path: str,
     recursive: bool = True,
+    max_file_size: Optional[int] = None,
     quiet: bool = False,
 ) -> Report:
     """Orchestrate a local filesystem scan.
@@ -197,9 +225,11 @@ def run_local_scan(
     """
     from crypto_recon.output.console import ConsoleOutput
     from crypto_recon.scanner.secret_scanner import SecretScanner
+    from crypto_recon.scanner.dependency_scanner import DependencyScanner
 
     console = ConsoleOutput()
-    scanner = SecretScanner()
+    scanner = SecretScanner(max_file_size=max_file_size)
+    dependency_scanner = DependencyScanner()
     report = Report(
         target=path,
         scan_type="local",
@@ -208,7 +238,10 @@ def run_local_scan(
     )
 
     files: list[str] = []
+    from crypto_recon.config import SKIP_DIRS
+
     for dirpath, dirnames, filenames in os.walk(path, onerror=None):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for fname in filenames:
             files.append(os.path.join(dirpath, fname))
         if not recursive:
@@ -216,13 +249,15 @@ def run_local_scan(
 
     if quiet:
         for fp in files:
-            report.findings.extend(scanner.scan_file(fp))
+            report.extend_results(scanner.scan_file(fp))
+            report.extend_results(dependency_scanner.scan_file(fp))
     else:
         with console.create_progress() as progress:
             task = progress.add_task("[cyan]Scanning files…[/cyan]", total=len(files))
             for fp in files:
                 try:
-                    report.findings.extend(scanner.scan_file(fp))
+                    report.extend_results(scanner.scan_file(fp))
+                    report.extend_results(dependency_scanner.scan_file(fp))
                 except Exception as exc:
                     logger.debug("Error scanning %s: %s", fp, exc)
                 progress.advance(task)
@@ -246,6 +281,7 @@ def _output_report(
     """Render and optionally save *report* in the chosen format."""
     from crypto_recon.output.console import ConsoleOutput
     from crypto_recon.output.json_output import JSONOutput
+    from crypto_recon.output.cbom_output import CBOMOutput
     from crypto_recon.output.html_output import HTMLOutput
 
     # Filter findings by minimum severity
@@ -255,6 +291,7 @@ def _output_report(
         out = ConsoleOutput(no_color=no_color)
         if not quiet:
             out.print_findings(filtered)
+            out.print_assets(report.assets)
         out.print_summary(report)
 
     elif fmt == "json":
@@ -276,6 +313,12 @@ def _output_report(
         ho.write(report, dest)
         report.findings = original
         print(f"HTML report written to: {dest}")
+    elif fmt == "cbom":
+        co = CBOMOutput()
+        if report_file:
+            co.write(report, report_file)
+        else:
+            print(co.to_string(report))
 
     # Always save to file if requested and format isn't already writing it
     if report_file and fmt == "console":
@@ -427,6 +470,8 @@ def main() -> None:
                     threads=args.threads,
                     deep=getattr(args, "deep", False),
                     github_token=getattr(args, "github_token", None),
+                    max_requests=getattr(args, "max_requests", None),
+                    rate_limit=getattr(args, "rate_limit", None),
                     quiet=args.quiet,
                 )
 
@@ -440,6 +485,7 @@ def main() -> None:
                 report = run_local_scan(
                     path,
                     recursive=getattr(args, "recursive", True),
+                    max_file_size=getattr(args, "max_file_size", None),
                     quiet=args.quiet,
                 )
             else:

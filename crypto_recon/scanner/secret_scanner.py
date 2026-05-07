@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import os
 import re
-from typing import List
+from typing import Optional
 
 from crypto_recon.config import SECRET_PATTERNS
+from crypto_recon.models.asset import Asset, AssetType, Confidence
+from crypto_recon.models.evidence import Evidence
 from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.scan_result import ScanResults
+from crypto_recon.utils.redaction import fingerprint_secret, redact_secret
 from crypto_recon.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +42,19 @@ def _severity_for(name: str) -> Severity:
 class SecretScanner:
     """Scan text or files for exposed secrets using regex patterns."""
 
-    def scan_text(self, text: str, source_url: str = "") -> List[Finding]:
+    def __init__(self, max_file_size: Optional[int] = None, max_read_bytes: Optional[int] = None) -> None:
+        """Initialise the scanner.
+
+        Args:
+            max_file_size: Maximum file size to scan (bytes).
+            max_read_bytes: Maximum bytes to read from a file.
+        """
+        from crypto_recon.config import MAX_FILE_SIZE_BYTES, MAX_FILE_READ_BYTES
+
+        self.max_file_size = max_file_size or MAX_FILE_SIZE_BYTES
+        self.max_read_bytes = max_read_bytes or MAX_FILE_READ_BYTES
+
+    def scan_text(self, text: str, source_url: str = "") -> ScanResults:
         """Search *text* for known secret patterns.
 
         Args:
@@ -46,29 +62,50 @@ class SecretScanner:
             source_url: Where the content came from (used in evidence).
 
         Returns:
-            List of :class:`Finding` objects, one per matched secret type per source.
+            :class:`ScanResults` containing findings and secret-reference assets.
         """
-        findings: List[Finding] = []
+        results = ScanResults()
         seen: set[str] = set()
 
         for name, pattern in _COMPILED.items():
             try:
-                match = pattern.search(text)
+                matches = list(pattern.finditer(text))
             except re.error as exc:
                 logger.debug("Regex error for pattern %r: %s", name, exc)
                 continue
 
-            if match:
-                key = f"{name}::{source_url}"
+            for match in matches:
+                matched_value = match.group(0)
+                redacted = redact_secret(matched_value)
+                fingerprint = fingerprint_secret(matched_value)
+                line_number = text[: match.start()].count("\n") + 1
+
+                key = f"{name}::{fingerprint}::{source_url}::{line_number}"
                 if key in seen:
                     continue
                 seen.add(key)
 
-                matched_value = match.group(0)
-                # Truncate long matches so they don't swamp the report
-                evidence_value = matched_value[:120] + ("…" if len(matched_value) > 120 else "")
+                is_url = source_url.startswith("http") if source_url else False
+                evidence = Evidence(
+                    url=source_url if is_url else None,
+                    file_path=source_url if source_url and not is_url else None,
+                    line_number=line_number,
+                    details={"redacted": redacted, "secret_type": name},
+                )
 
-                findings.append(
+                results.assets.append(
+                    Asset(
+                        asset_type=AssetType.SECRET_REFERENCE,
+                        name=f"{name} reference",
+                        description="Redacted secret reference detected in scanned content.",
+                        confidence=Confidence.HIGH,
+                        evidence=evidence,
+                        fingerprint=fingerprint,
+                        metadata={"redacted": redacted, "secret_type": name},
+                    )
+                )
+
+                results.findings.append(
                     Finding(
                         title=f"Exposed Secret: {name}",
                         description=(
@@ -77,37 +114,43 @@ class SecretScanner:
                         ),
                         severity=_severity_for(name),
                         category=Category.SECRETS,
-                        evidence=f"Match: {evidence_value}" + (f" | Source: {source_url}" if source_url else ""),
+                        confidence=Confidence.HIGH,
+                        evidence=evidence,
                         remediation=(
                             "Revoke and rotate the exposed credential immediately. "
                             "Remove it from the codebase and audit git history."
                         ),
-                        url=source_url,
+                        url=source_url if is_url else "",
                         cwe="CWE-312",
                     )
                 )
 
-        return findings
+        return results
 
-    def scan_file(self, filepath: str) -> List[Finding]:
+    def scan_file(self, filepath: str) -> ScanResults:
         """Scan a local *filepath* for secrets.
 
         Args:
             filepath: Absolute or relative path to the file.
 
         Returns:
-            List of :class:`Finding` objects.
+            :class:`ScanResults` containing findings and secret-reference assets.
         """
         try:
+            file_size = os.path.getsize(filepath)
+            if file_size > self.max_file_size:
+                return ScanResults()
+
             with open(filepath, "rb") as fh:
-                raw = fh.read(65536)  # Limit to 64 KB per file
+                raw = fh.read(self.max_read_bytes)
+            if b"\x00" in raw[:2048]:
+                return ScanResults()
             text = raw.decode("utf-8", errors="ignore")
         except OSError as exc:
             logger.debug("Cannot read file %s: %s", filepath, exc)
-            return []
+            return ScanResults()
 
-        findings = self.scan_text(text, source_url=filepath)
-        # Override category to LOCAL for file-based findings
-        for f in findings:
+        results = self.scan_text(text, source_url=filepath)
+        for f in results.findings:
             f.category = Category.LOCAL
-        return findings
+        return results

@@ -5,12 +5,12 @@ with open("README.md", encoding="utf-8") as fh:
 
 setup(
     name="crypto-recon",
-    version="2.0.0",
+    version="2.1.0",
     author="CryptoRecon Team",
-    description="Professional Cryptographic Asset & Secret Discovery Tool",
+    description="CBOM discovery tool for cryptographic assets and secrets",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/crypto-asset-scanner",
+    url="https://github.com/abdulrafayishaCkER/crypto-asset-scanner",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
@@ -20,6 +20,7 @@ setup(
         "rich>=13.0.0",
         "dnspython>=2.4.0",
         "beautifulsoup4>=4.12.0",
+        "tomli>=2.0.0; python_version<'3.11'",
     ],
     entry_points={
         "console_scripts": [
