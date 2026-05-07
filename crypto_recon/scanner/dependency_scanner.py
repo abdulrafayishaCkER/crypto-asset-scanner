@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Iterable
+from collections.abc import Iterable
 
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
@@ -31,7 +31,7 @@ class DependencyScanner:
     def _scan_requirements(self, filepath: str) -> ScanResults:
         results = ScanResults()
         try:
-            with open(filepath, "r", encoding="utf-8") as fh:
+            with open(filepath, encoding="utf-8") as fh:
                 lines = fh.readlines()
         except OSError as exc:
             logger.debug("Unable to read requirements file %s: %s", filepath, exc)
@@ -57,7 +57,7 @@ class DependencyScanner:
     def _scan_package_json(self, filepath: str) -> ScanResults:
         results = ScanResults()
         try:
-            with open(filepath, "r", encoding="utf-8") as fh:
+            with open(filepath, encoding="utf-8") as fh:
                 payload = json.load(fh)
         except (OSError, json.JSONDecodeError) as exc:
             logger.debug("Unable to parse package.json %s: %s", filepath, exc)

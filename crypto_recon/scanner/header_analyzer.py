@@ -6,10 +6,10 @@ from typing import List
 
 from crypto_recon.models.asset import Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
-from crypto_recon.utils.network import make_request
 from crypto_recon.utils.logger import get_logger
+from crypto_recon.utils.network import make_request
 
 logger = get_logger(__name__)
 

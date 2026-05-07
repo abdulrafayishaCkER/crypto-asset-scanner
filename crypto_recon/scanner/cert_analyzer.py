@@ -7,7 +7,7 @@ import hashlib
 
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
 from crypto_recon.utils.logger import get_logger
 
@@ -33,10 +33,10 @@ class CertAnalyzer:
         results = ScanResults()
         try:
             from sslyze import (
-                Scanner,
-                ServerScanRequest,
-                ServerNetworkLocation,
                 ScanCommandAttemptStatusEnum,
+                Scanner,
+                ServerNetworkLocation,
+                ServerScanRequest,
             )
         except ImportError:
             logger.warning("sslyze not installed; skipping certificate analysis.")
@@ -67,7 +67,7 @@ class CertAnalyzer:
 
         deployments = cert_attempt.result.certificate_deployments
         if not deployments:
-            return findings
+            return results
 
         chain = deployments[0].received_certificate_chain
         now = datetime.datetime.now(datetime.timezone.utc)

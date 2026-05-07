@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 @dataclass
 class Evidence:
     """Represent safe evidence without storing raw secrets."""
 
-    file_path: Optional[str] = None
-    line_number: Optional[int] = None
-    url: Optional[str] = None
-    endpoint: Optional[str] = None
-    certificate_fingerprint: Optional[str] = None
+    file_path: str | None = None
+    line_number: int | None = None
+    url: str | None = None
+    endpoint: str | None = None
+    certificate_fingerprint: str | None = None
     details: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:

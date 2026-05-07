@@ -6,9 +6,9 @@ from typing import List
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from crypto_recon.models.asset import Asset
 from crypto_recon.models.finding import Finding, Severity

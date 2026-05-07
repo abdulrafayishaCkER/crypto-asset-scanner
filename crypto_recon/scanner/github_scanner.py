@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import List
 
 from crypto_recon.models.asset import Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
-from crypto_recon.utils.network import make_request
 from crypto_recon.utils.logger import get_logger
+from crypto_recon.utils.network import make_request
 
 logger = get_logger(__name__)
 
@@ -20,7 +20,7 @@ _MAX_RESULTS = 10
 class GitHubScanner:
     """Search GitHub public repositories for references to a target domain."""
 
-    def __init__(self, token: Optional[str] = None) -> None:
+    def __init__(self, token: str | None = None) -> None:
         """Initialise the scanner.
 
         Args:

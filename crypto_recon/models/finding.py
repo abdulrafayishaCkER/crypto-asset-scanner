@@ -6,10 +6,10 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from crypto_recon.models.asset import Confidence
 from crypto_recon.models.evidence import Evidence
+
 
 class Severity(Enum):
     """Finding severity levels."""

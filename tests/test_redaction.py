@@ -1,4 +1,4 @@
-from crypto_recon.utils.redaction import redact_secret, fingerprint_secret
+from crypto_recon.utils.redaction import fingerprint_secret, redact_secret
 
 
 def test_redact_secret() -> None:

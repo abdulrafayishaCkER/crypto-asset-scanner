@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+
 
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
-from crypto_recon.utils.network import make_request
 from crypto_recon.utils.logger import get_logger
+from crypto_recon.utils.network import make_request
 
 logger = get_logger(__name__)
 
@@ -98,7 +98,7 @@ class SubdomainEnumerator:
         return results
 
 
-def _normalize_subdomain(value: str) -> Optional[str]:
+def _normalize_subdomain(value: str) -> str | None:
     candidate = value.strip().lower().rstrip(".")
     if candidate.startswith("*."):
         candidate = candidate[2:]

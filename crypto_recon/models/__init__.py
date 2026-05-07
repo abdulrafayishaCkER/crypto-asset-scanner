@@ -2,7 +2,7 @@
 
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.report import Report
 from crypto_recon.models.scan_result import ScanResults
 

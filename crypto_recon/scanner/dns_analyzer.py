@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
 from crypto_recon.config import DKIM_SELECTORS
 from crypto_recon.models.asset import Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
 from crypto_recon.utils.logger import get_logger
 
@@ -29,10 +29,10 @@ class DNSAnalyzer:
             :class:`ScanResults` containing DNS findings.
         """
         try:
-            import dns.resolver
-            import dns.query
-            import dns.zone
             import dns.exception
+            import dns.query
+            import dns.resolver
+            import dns.zone
         except ImportError:
             logger.warning("dnspython not installed; skipping DNS analysis.")
             return ScanResults()
@@ -49,7 +49,7 @@ class DNSAnalyzer:
 
     # ------------------------------------------------------------------ helpers
 
-    def _resolve(self, dns_module, qname: str, rdtype: str) -> "DNSLookupResult":
+    def _resolve(self, dns_module, qname: str, rdtype: str) -> DNSLookupResult:
         """Attempt DNS resolution; return records plus error classification."""
         resolver = dns_module.resolver.Resolver()
         resolver.timeout = 2.0
@@ -68,7 +68,7 @@ class DNSAnalyzer:
             return DNSLookupResult([], DNSError.UNKNOWN)
 
     @staticmethod
-    def _dns_error_finding(label: str, qname: str, error: "DNSError") -> Finding:
+    def _dns_error_finding(label: str, qname: str, error: DNSError) -> Finding:
         return Finding(
             title=f"DNS Lookup Failed ({label})",
             description=f"DNS lookup for {label} records failed with {error.value}.",
@@ -312,4 +312,4 @@ class DNSLookupResult:
     """DNS lookup results with error classification."""
 
     records: list
-    error: Optional[DNSError] = None
+    error: DNSError | None = None

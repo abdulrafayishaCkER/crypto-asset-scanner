@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, Optional
 
 from crypto_recon.models.asset import Asset, AssetType
 from crypto_recon.models.finding import Finding, Severity
@@ -20,7 +20,7 @@ class Report:
     start_time: datetime
     findings: list[Finding] = field(default_factory=list)
     assets: list[Asset] = field(default_factory=list)
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     metadata: dict = field(default_factory=dict)
     _finding_keys: set[str] = field(default_factory=set, init=False, repr=False)
     _asset_keys: set[str] = field(default_factory=set, init=False, repr=False)

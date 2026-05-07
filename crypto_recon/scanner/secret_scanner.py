@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Optional
 
 from crypto_recon.config import SECRET_PATTERNS
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
-from crypto_recon.utils.redaction import fingerprint_secret, redact_secret
 from crypto_recon.utils.logger import get_logger
+from crypto_recon.utils.redaction import fingerprint_secret, redact_secret
 
 logger = get_logger(__name__)
 
@@ -42,14 +41,14 @@ def _severity_for(name: str) -> Severity:
 class SecretScanner:
     """Scan text or files for exposed secrets using regex patterns."""
 
-    def __init__(self, max_file_size: Optional[int] = None, max_read_bytes: Optional[int] = None) -> None:
+    def __init__(self, max_file_size: int | None = None, max_read_bytes: int | None = None) -> None:
         """Initialise the scanner.
 
         Args:
             max_file_size: Maximum file size to scan (bytes).
             max_read_bytes: Maximum bytes to read from a file.
         """
-        from crypto_recon.config import MAX_FILE_SIZE_BYTES, MAX_FILE_READ_BYTES
+        from crypto_recon.config import MAX_FILE_READ_BYTES, MAX_FILE_SIZE_BYTES
 
         self.max_file_size = max_file_size or MAX_FILE_SIZE_BYTES
         self.max_read_bytes = max_read_bytes or MAX_FILE_READ_BYTES

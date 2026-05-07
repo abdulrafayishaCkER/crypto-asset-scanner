@@ -7,13 +7,12 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from crypto_recon import __version__
-from crypto_recon.models.finding import Finding, Severity
+from crypto_recon.models.finding import Severity
 from crypto_recon.models.report import Report
 from crypto_recon.utils.logger import get_logger
-from crypto_recon.utils.validators import validate_target, validate_port, validate_directory
+from crypto_recon.utils.validators import validate_directory, validate_port, validate_target
 
 logger = get_logger(__name__)
 
@@ -130,9 +129,9 @@ def run_web_scan(
     timeout: int = 10,
     threads: int = 5,
     deep: bool = False,
-    github_token: Optional[str] = None,
-    max_requests: Optional[int] = None,
-    rate_limit: Optional[float] = None,
+    github_token: str | None = None,
+    max_requests: int | None = None,
+    rate_limit: float | None = None,
     quiet: bool = False,
 ) -> Report:
     """Orchestrate a full web target scan and return a :class:`Report`.
@@ -151,13 +150,13 @@ def run_web_scan(
     """
     from crypto_recon.output.console import ConsoleOutput
     from crypto_recon.scanner import (
-        TLSScanner,
         CertAnalyzer,
-        HeaderAnalyzer,
-        WebCrawler,
-        SubdomainEnumerator,
         DNSAnalyzer,
         GitHubScanner,
+        HeaderAnalyzer,
+        SubdomainEnumerator,
+        TLSScanner,
+        WebCrawler,
     )
 
     console = ConsoleOutput()
@@ -210,7 +209,7 @@ def run_web_scan(
 def run_local_scan(
     path: str,
     recursive: bool = True,
-    max_file_size: Optional[int] = None,
+    max_file_size: int | None = None,
     quiet: bool = False,
 ) -> Report:
     """Orchestrate a local filesystem scan.
@@ -224,8 +223,8 @@ def run_local_scan(
         Completed :class:`Report`.
     """
     from crypto_recon.output.console import ConsoleOutput
-    from crypto_recon.scanner.secret_scanner import SecretScanner
     from crypto_recon.scanner.dependency_scanner import DependencyScanner
+    from crypto_recon.scanner.secret_scanner import SecretScanner
 
     console = ConsoleOutput()
     scanner = SecretScanner(max_file_size=max_file_size)
@@ -273,16 +272,16 @@ def run_local_scan(
 def _output_report(
     report: Report,
     fmt: str,
-    report_file: Optional[str],
+    report_file: str | None,
     min_severity: Severity,
     no_color: bool,
     quiet: bool,
 ) -> None:
     """Render and optionally save *report* in the chosen format."""
-    from crypto_recon.output.console import ConsoleOutput
-    from crypto_recon.output.json_output import JSONOutput
     from crypto_recon.output.cbom_output import CBOMOutput
+    from crypto_recon.output.console import ConsoleOutput
     from crypto_recon.output.html_output import HTMLOutput
+    from crypto_recon.output.json_output import JSONOutput
 
     # Filter findings by minimum severity
     filtered = [f for f in report.findings if _severity_gte(f.severity, min_severity)]

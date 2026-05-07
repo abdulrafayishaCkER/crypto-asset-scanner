@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import socket
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
@@ -22,7 +21,7 @@ def make_request(
     timeout: int = 10,
     verify: bool = False,
     **kwargs,
-) -> Optional[requests.Response]:
+) -> requests.Response | None:
     """Perform an HTTP request, returning the response or *None* on failure.
 
     Args:
@@ -74,7 +73,7 @@ def check_connectivity(host: str, port: int = 443, timeout: int = 5) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (socket.timeout, socket.error, OSError):
+    except (socket.timeout, OSError):
         return False
 
 

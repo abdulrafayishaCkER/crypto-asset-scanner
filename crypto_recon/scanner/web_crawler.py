@@ -6,7 +6,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional
+
 from urllib.parse import urljoin
 
 from crypto_recon.config import (
@@ -21,11 +21,11 @@ from crypto_recon.config import (
 )
 from crypto_recon.models.asset import Asset, AssetType, Confidence
 from crypto_recon.models.evidence import Evidence
-from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.finding import Category, Finding, Severity
 from crypto_recon.models.scan_result import ScanResults
 from crypto_recon.scanner.secret_scanner import SecretScanner
-from crypto_recon.utils.network import make_request
 from crypto_recon.utils.logger import get_logger
+from crypto_recon.utils.network import make_request
 
 logger = get_logger(__name__)
 
@@ -46,7 +46,7 @@ class WebCrawler:
         threads: int = MAX_THREADS,
         max_requests: int = MAX_REQUEST_BUDGET,
         rate_limit: float = RATE_LIMIT_PER_SECOND,
-        user_agent: Optional[str] = None,
+        user_agent: str | None = None,
     ) -> None:
         """Initialise the crawler.
 
