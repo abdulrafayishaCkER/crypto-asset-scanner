@@ -8,6 +8,7 @@ from crypto_recon.scanner.web_crawler import WebCrawler
 from crypto_recon.scanner.subdomain_enum import SubdomainEnumerator
 from crypto_recon.scanner.dns_analyzer import DNSAnalyzer
 from crypto_recon.scanner.github_scanner import GitHubScanner
+from crypto_recon.scanner.dependency_scanner import DependencyScanner
 
 __all__ = [
     "TLSScanner",
@@ -18,4 +19,5 @@ __all__ = [
     "SubdomainEnumerator",
     "DNSAnalyzer",
     "GitHubScanner",
+    "DependencyScanner",
 ]

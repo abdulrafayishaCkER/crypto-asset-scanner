@@ -5,7 +5,26 @@ from __future__ import annotations
 HTTP_TIMEOUT: int = 10
 MAX_THREADS: int = 5
 MAX_CRAWL_DEPTH: int = 2
-USER_AGENT: str = "CryptoRecon/2.0 Security Scanner"
+USER_AGENT: str = "CryptoRecon/2.1 CBOM Scanner"
+MAX_REQUESTS: int = 200
+REQUESTS_PER_SECOND: float = 5.0
+MAX_FILE_SIZE_BYTES: int = 1_000_000
+SKIP_DIR_NAMES: set[str] = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".tox",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "vendor",
+    "coverage",
+    ".idea",
+    ".vscode",
+}
 
 WEAK_CIPHER_KEYWORDS: list[str] = ["RC4", "3DES", "DES", "NULL", "MD5", "EXPORT", "anon"]
 

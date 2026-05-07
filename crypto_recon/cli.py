@@ -7,10 +7,10 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 from crypto_recon import __version__
-from crypto_recon.models.finding import Finding, Severity
+from crypto_recon.models.finding import Severity
 from crypto_recon.models.report import Report
 from crypto_recon.utils.logger import get_logger
 from crypto_recon.utils.validators import validate_target, validate_port, validate_directory
@@ -42,7 +42,7 @@ def create_parser() -> argparse.ArgumentParser:
     """Build and return the top-level argument parser."""
     parser = argparse.ArgumentParser(
         prog="cryptorecon",
-        description="CryptoRecon – Professional Cryptographic Asset & Secret Discovery Tool",
+        description="CryptoRecon – Cryptographic Asset & CBOM Discovery Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -82,7 +82,7 @@ def _add_common_options(p: argparse.ArgumentParser) -> None:
     """Attach shared options to a sub-command parser."""
     p.add_argument(
         "--output",
-        choices=["console", "json", "html"],
+        choices=["console", "json", "html", "cbom"],
         default="console",
         help="Output format (default: console)",
     )
@@ -141,6 +141,7 @@ def run_web_scan(
     )
 
     console = ConsoleOutput()
+    crawler = WebCrawler(timeout=timeout, threads=threads)
     report = Report(
         target=target,
         scan_type="web",
@@ -152,8 +153,8 @@ def run_web_scan(
         ("TLS Configuration", lambda: TLSScanner(timeout=timeout).scan(target, port)),
         ("Certificate Chain", lambda: CertAnalyzer().analyze(target, port)),
         ("Security Headers", lambda: HeaderAnalyzer().analyze(target, port)),
-        ("Exposed Paths & Secrets", lambda: WebCrawler(timeout=timeout, threads=threads).crawl(target, port)),
-        ("API Endpoints", lambda: WebCrawler(timeout=timeout, threads=threads).discover_api_endpoints(target, port)),
+        ("Exposed Paths & Secrets", lambda: crawler.crawl(target, port)),
+        ("API Endpoints", lambda: crawler.discover_api_endpoints(target, port)),
         ("Subdomain Enumeration", lambda: SubdomainEnumerator().enumerate(_base_domain(target))),
         ("DNS Analysis", lambda: DNSAnalyzer().analyze(_base_domain(target))),
         ("GitHub Code Search", lambda: GitHubScanner(token=github_token or os.getenv("GITHUB_TOKEN")).search(target)),
@@ -162,7 +163,7 @@ def run_web_scan(
     if quiet:
         for _, fn in steps:
             try:
-                report.findings.extend(fn())
+                report.add_scan_result(fn())
             except Exception as exc:
                 logger.error("Scan step failed: %s", exc)
     else:
@@ -171,7 +172,7 @@ def run_web_scan(
             for name, fn in steps:
                 progress.update(task, description=f"[cyan]{name}[/cyan]…")
                 try:
-                    report.findings.extend(fn())
+                    report.add_scan_result(fn())
                 except Exception as exc:
                     logger.error("Step %r failed: %s", name, exc)
                 progress.advance(task)
@@ -196,10 +197,13 @@ def run_local_scan(
         Completed :class:`Report`.
     """
     from crypto_recon.output.console import ConsoleOutput
+    from crypto_recon.scanner.dependency_scanner import DependencyScanner
     from crypto_recon.scanner.secret_scanner import SecretScanner
+    from crypto_recon.config import SKIP_DIR_NAMES
 
     console = ConsoleOutput()
     scanner = SecretScanner()
+    dependency_scanner = DependencyScanner()
     report = Report(
         target=path,
         scan_type="local",
@@ -209,6 +213,7 @@ def run_local_scan(
 
     files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(path, onerror=None):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIR_NAMES]
         for fname in filenames:
             files.append(os.path.join(dirpath, fname))
         if not recursive:
@@ -216,13 +221,26 @@ def run_local_scan(
 
     if quiet:
         for fp in files:
-            report.findings.extend(scanner.scan_file(fp))
+            result = scanner.scan_file(fp)
+            report.add_scan_result(result)
+            if os.path.basename(fp).lower() in {"requirements.txt", "package.json"}:
+                try:
+                    with open(fp, "r", encoding="utf-8", errors="ignore") as fh:
+                        content = fh.read()
+                    report.add_scan_result(dependency_scanner.scan_file(fp, content))
+                except OSError:
+                    continue
     else:
         with console.create_progress() as progress:
             task = progress.add_task("[cyan]Scanning files…[/cyan]", total=len(files))
             for fp in files:
                 try:
-                    report.findings.extend(scanner.scan_file(fp))
+                    result = scanner.scan_file(fp)
+                    report.add_scan_result(result)
+                    if os.path.basename(fp).lower() in {"requirements.txt", "package.json"}:
+                        with open(fp, "r", encoding="utf-8", errors="ignore") as fh:
+                            content = fh.read()
+                        report.add_scan_result(dependency_scanner.scan_file(fp, content))
                 except Exception as exc:
                     logger.debug("Error scanning %s: %s", fp, exc)
                 progress.advance(task)
@@ -247,6 +265,7 @@ def _output_report(
     from crypto_recon.output.console import ConsoleOutput
     from crypto_recon.output.json_output import JSONOutput
     from crypto_recon.output.html_output import HTMLOutput
+    from crypto_recon.output.cbom_output import CBOMOutput
 
     # Filter findings by minimum severity
     filtered = [f for f in report.findings if _severity_gte(f.severity, min_severity)]
@@ -255,6 +274,7 @@ def _output_report(
         out = ConsoleOutput(no_color=no_color)
         if not quiet:
             out.print_findings(filtered)
+            out.print_assets(report.assets)
         out.print_summary(report)
 
     elif fmt == "json":
@@ -276,6 +296,13 @@ def _output_report(
         ho.write(report, dest)
         report.findings = original
         print(f"HTML report written to: {dest}")
+
+    elif fmt == "cbom":
+        co = CBOMOutput()
+        if report_file:
+            co.write(report, report_file)
+        else:
+            print(co.to_string(report))
 
     # Always save to file if requested and format isn't already writing it
     if report_file and fmt == "console":
@@ -340,6 +367,7 @@ def _interactive_web_scan() -> None:
 
     out = ConsoleOutput()
     out.print_findings(report.findings)
+    out.print_assets(report.assets)
     out.print_summary(report)
 
 
@@ -368,6 +396,7 @@ def _interactive_local_scan() -> None:
         print(f"\n[*] Scanning {directory} …")
         report = run_local_scan(directory)
         out.print_findings(report.findings)
+        out.print_assets(report.assets)
         out.print_summary(report)
 
 

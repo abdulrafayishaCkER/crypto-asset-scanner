@@ -10,6 +10,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from crypto_recon.models.asset import Asset
 from crypto_recon.models.finding import Finding, Severity
 from crypto_recon.models.report import Report
 
@@ -36,7 +37,7 @@ _BANNER = r"""[cyan]
 / /___/ /_/ / / / (__  ) /_/ /_/ / / / / / /  __/ / / / / /
 \____/\____/_/ /_/____/\__/\____/_/ /_/ /_/\___/_/ /_/ /_/ 
 
-              CryptoRecon v2.0 - Professional Security Scanner
+               CryptoRecon v2.1 - CBOM Discovery Scanner
 [/cyan]"""
 
 
@@ -72,6 +73,7 @@ class ConsoleOutput:
             expand=True,
         )
         table.add_column("Sev", style="bold", width=4, no_wrap=True)
+        table.add_column("Conf", width=5)
         table.add_column("Category", width=12)
         table.add_column("Title")
         table.add_column("Evidence", overflow="fold")
@@ -82,9 +84,13 @@ class ConsoleOutput:
             color = SEVERITY_COLORS.get(sev_val, "white")
             table.add_row(
                 Text(f"{icon}", style=color),
+                Text(finding.confidence.value[:1].upper(), style="dim"),
                 Text(finding.category.value, style="dim"),
                 Text(finding.title, style=color),
-                Text(finding.evidence[:120] if finding.evidence else "—", style="dim"),
+                Text(
+                    finding.evidence.summary()[:120] if finding.evidence else "—",
+                    style="dim",
+                ),
             )
 
         self.console.print(table)
@@ -102,6 +108,7 @@ class ConsoleOutput:
             f"[bold]Target:[/bold]  {report.target}",
             f"[bold]Type:[/bold]    {report.scan_type}",
             f"[bold]Total:[/bold]   {summary['total_findings']} findings",
+            f"[bold]Assets:[/bold]  {summary.get('total_assets', 0)} assets",
             "",
         ]
 
@@ -117,6 +124,33 @@ class ConsoleOutput:
         self.console.print(
             Panel("\n".join(lines), title="[bold cyan]Scan Summary[/bold cyan]", expand=False)
         )
+
+    def print_assets(self, assets: List[Asset]) -> None:
+        """Render a table of *assets* to the console."""
+        if not assets:
+            self.console.print("[green]No assets recorded.[/green]")
+            return
+
+        table = Table(
+            title="Assets",
+            show_lines=True,
+            header_style="bold blue",
+            expand=True,
+        )
+        table.add_column("Type", width=16)
+        table.add_column("Conf", width=5)
+        table.add_column("Name")
+        table.add_column("Evidence", overflow="fold")
+
+        for asset in assets:
+            table.add_row(
+                Text(asset.asset_type.value, style="dim"),
+                Text(asset.confidence.value[:1].upper(), style="dim"),
+                Text(asset.name),
+                Text(asset.evidence.summary()[:120] if asset.evidence else "—", style="dim"),
+            )
+
+        self.console.print(table)
 
     def create_progress(self) -> Progress:
         """Return a configured :class:`~rich.progress.Progress` context manager.

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from typing import List
 
-from crypto_recon.models.finding import Finding, Severity, Category
 from crypto_recon.config import WEAK_CIPHER_KEYWORDS
+from crypto_recon.models.asset import Asset, AssetType, Confidence
+from crypto_recon.models.evidence import Evidence
+from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.scan_result import ScanResult
 from crypto_recon.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,7 +41,7 @@ class TLSScanner:
         """
         self.timeout = timeout
 
-    def scan(self, target: str, port: int = 443) -> List[Finding]:
+    def scan(self, target: str, port: int = 443) -> ScanResult:
         """Scan *target*:*port* and return a list of TLS-related findings.
 
         Args:
@@ -47,9 +49,10 @@ class TLSScanner:
             port: TCP port (default 443).
 
         Returns:
-            List of :class:`Finding` objects describing the TLS posture.
+            :class:`ScanResult` describing the TLS posture.
         """
         findings: List[Finding] = []
+        assets: List[Asset] = []
         try:
             from sslyze import (
                 Scanner,
@@ -59,7 +62,7 @@ class TLSScanner:
             )
         except ImportError:
             logger.warning("sslyze not installed; skipping TLS scan.")
-            return findings
+            return ScanResult()
 
         try:
             scanner = Scanner()
@@ -70,12 +73,13 @@ class TLSScanner:
             scan_results = list(scanner.get_results())
         except Exception as exc:
             logger.error("sslyze scan failed for %s:%d – %s", target, port, exc)
-            return findings
+            return ScanResult()
 
         if not scan_results:
-            return findings
+            return ScanResult()
 
         server_scan = scan_results[0]
+        endpoint = f"{target}:{port}"
         if server_scan.scan_status.name == "ERROR_NO_CONNECTIVITY":
             findings.append(
                 Finding(
@@ -83,11 +87,12 @@ class TLSScanner:
                     description=f"Could not connect to {target}:{port} over TLS.",
                     severity=Severity.HIGH,
                     category=Category.TLS,
-                    evidence=f"Port {port}/tcp unreachable",
+                    confidence=Confidence.HIGH,
+                    evidence=Evidence(endpoint=endpoint, details="Port unreachable"),
                     remediation="Verify the host is reachable and TLS is enabled.",
                 )
             )
-            return findings
+            return ScanResult(findings=findings, assets=assets)
 
         scan_res = server_scan.scan_result
         protocol_map = [
@@ -102,7 +107,7 @@ class TLSScanner:
         try:
             status_enum = ScanCommandAttemptStatusEnum
         except Exception:
-            return findings
+            return ScanResult(findings=findings, assets=assets)
 
         for attr_name, label in protocol_map:
             attempt = getattr(scan_res, attr_name, None)
@@ -112,6 +117,29 @@ class TLSScanner:
             suites = [c.cipher_suite.name for c in attempt.result.accepted_cipher_suites]
             if not suites:
                 continue
+
+            protocol_asset = Asset(
+                asset_type=AssetType.TLS_PROTOCOL,
+                name=label,
+                description=f"TLS protocol support for {endpoint}.",
+                confidence=Confidence.HIGH,
+                evidence=Evidence(endpoint=endpoint),
+                metadata={"cipher_count": len(suites), "ciphers_sample": suites[:10]},
+            )
+            protocol_asset.dedup_key = protocol_asset.compute_dedup_key()
+            assets.append(protocol_asset)
+
+            for suite in suites:
+                cipher_asset = Asset(
+                    asset_type=AssetType.CIPHER_SUITE,
+                    name=suite,
+                    description=f"Cipher suite accepted under {label}.",
+                    confidence=Confidence.HIGH,
+                    evidence=Evidence(endpoint=endpoint),
+                    metadata={"protocol": label, "classification": _classify_cipher(suite)},
+                )
+                cipher_asset.dedup_key = cipher_asset.compute_dedup_key()
+                assets.append(cipher_asset)
 
             # Flag deprecated protocols
             if label in _DEPRECATED_PROTOCOLS:
@@ -125,7 +153,11 @@ class TLSScanner:
                         ),
                         severity=severity,
                         category=Category.TLS,
-                        evidence=f"{label} accepted cipher suites: {', '.join(suites[:5])}",
+                        confidence=Confidence.HIGH,
+                        evidence=Evidence(
+                            endpoint=endpoint,
+                            details=f"{label} accepted cipher suites: {', '.join(suites[:5])}",
+                        ),
                         remediation=(
                             "Disable all protocol versions below TLS 1.2. "
                             "Configure the server to support only TLS 1.2 and TLS 1.3."
@@ -146,7 +178,11 @@ class TLSScanner:
                         ),
                         severity=Severity.HIGH,
                         category=Category.TLS,
-                        evidence=", ".join(weak_suites[:10]),
+                        confidence=Confidence.HIGH,
+                        evidence=Evidence(
+                            endpoint=endpoint,
+                            details=", ".join(weak_suites[:10]),
+                        ),
                         remediation=(
                             "Remove all RC4, 3DES, DES, NULL, EXPORT, and anonymous cipher "
                             "suites. Prefer ECDHE+AESGCM and ChaCha20-Poly1305."
@@ -168,11 +204,12 @@ class TLSScanner:
                         ),
                         severity=Severity.CRITICAL,
                         category=Category.TLS,
-                        evidence="sslyze confirmed Heartbleed response",
+                        confidence=Confidence.HIGH,
+                        evidence=Evidence(endpoint=endpoint, details="sslyze confirmed Heartbleed"),
                         remediation="Update OpenSSL to 1.0.1g or later immediately.",
                         cve="CVE-2014-0160",
                         cwe="CWE-125",
                     )
                 )
 
-        return findings
+        return ScanResult(findings=findings, assets=assets)

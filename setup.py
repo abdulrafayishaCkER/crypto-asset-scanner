@@ -5,12 +5,12 @@ with open("README.md", encoding="utf-8") as fh:
 
 setup(
     name="crypto-recon",
-    version="2.0.0",
+    version="2.1.0",
     author="CryptoRecon Team",
     description="Professional Cryptographic Asset & Secret Discovery Tool",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/crypto-asset-scanner",
+    url="https://github.com/abdulrafayishaCkER/crypto-asset-scanner",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[

@@ -74,3 +74,12 @@ def validate_directory(path: str) -> str:
     if not os.path.isdir(resolved):
         raise ValueError(f"Path is not a directory: {resolved!r}")
     return resolved
+
+
+def is_subdomain_of(candidate: str, base_domain: str) -> bool:
+    """Return True if *candidate* is the base domain or a strict subdomain."""
+    candidate = candidate.strip(".").lower()
+    base_domain = base_domain.strip(".").lower()
+    if candidate == base_domain:
+        return True
+    return candidate.endswith(f".{base_domain}")

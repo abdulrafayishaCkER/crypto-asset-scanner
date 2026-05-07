@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Optional, List
 
+from crypto_recon.models.asset import Confidence
+from crypto_recon.models.evidence import Evidence
 from crypto_recon.models.finding import Finding, Severity, Category
+from crypto_recon.models.scan_result import ScanResult
 from crypto_recon.utils.network import make_request
 from crypto_recon.utils.logger import get_logger
 
@@ -25,15 +28,8 @@ class GitHubScanner:
         """
         self.token = token
 
-    def search(self, domain: str) -> List[Finding]:
-        """Search GitHub for public code mentioning *domain*.
-
-        Args:
-            domain: Domain name to search for.
-
-        Returns:
-            List of :class:`Finding` objects.
-        """
+    def search(self, domain: str) -> ScanResult:
+        """Search GitHub for public code mentioning *domain*."""
         findings: List[Finding] = []
 
         headers: dict = {"Accept": "application/vnd.github.v3+json"}
@@ -49,10 +45,11 @@ class GitHubScanner:
                     ),
                     severity=Severity.INFO,
                     category=Category.GITHUB,
+                    confidence=Confidence.LOW,
                     remediation="Export GITHUB_TOKEN before running the scan.",
                 )
             )
-            return findings
+            return ScanResult(findings=findings)
 
         query = f"{domain} in:file"
         resp = make_request(
@@ -64,7 +61,7 @@ class GitHubScanner:
 
         if resp is None:
             logger.warning("GitHub search request failed for %s", domain)
-            return findings
+            return ScanResult(findings=findings)
 
         if resp.status_code == 403:
             findings.append(
@@ -73,16 +70,17 @@ class GitHubScanner:
                     description="The GitHub API returned 403 – rate limit exceeded.",
                     severity=Severity.INFO,
                     category=Category.GITHUB,
+                    confidence=Confidence.LOW,
                     remediation="Wait before retrying or use an authenticated token.",
                 )
             )
-            return findings
+            return ScanResult(findings=findings)
 
         try:
             data = resp.json()
         except ValueError as exc:
             logger.warning("GitHub API returned non-JSON: %s", exc)
-            return findings
+            return ScanResult(findings=findings)
 
         for item in data.get("items", []):
             repo = item.get("repository", {}).get("full_name", "unknown")
@@ -98,7 +96,8 @@ class GitHubScanner:
                     ),
                     severity=Severity.MEDIUM,
                     category=Category.GITHUB,
-                    evidence=f"Repo: {repo} | File: {path}",
+                    confidence=Confidence.MEDIUM,
+                    evidence=Evidence(url=html_url, details=f"Repo: {repo} | File: {path}"),
                     remediation=(
                         "Review the file for sensitive data. If secrets are exposed, "
                         "revoke and rotate them immediately."
@@ -107,4 +106,4 @@ class GitHubScanner:
                 )
             )
 
-        return findings
+        return ScanResult(findings=findings)
