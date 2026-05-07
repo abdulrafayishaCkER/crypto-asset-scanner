@@ -143,7 +143,7 @@ crypto_recon/
 ### From Source (recommended)
 
 ```bash
-git clone https://github.com/yourusername/crypto-asset-scanner.git
+git clone https://github.com/abdulrafayishaCkER/crypto-asset-scanner.git
 cd crypto-asset-scanner
 
 python -m venv .venv
